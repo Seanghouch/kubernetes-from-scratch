@@ -40,6 +40,10 @@ Install vim
 ````
 sudo apt install vim
 ````
+Install git
+````
+sudo apt install git
+````
 Add user to group root all node, and verify user group
 ````
 sudo su
@@ -116,7 +120,7 @@ Disable swap
 ````
 sudo swapoff -a
 ````
-comment swap
+Disable swap
 ````
 sudo vim /etc/fstab
 ````
@@ -144,4 +148,118 @@ EOF
 ````
 ````
 sudo sysctl --system
+````
+Install CRI-O Runtime
+````
+cat <<EOF | sudo tee /etc/modules-load.d/crio.conf
+overlay
+br_netfilter
+EOF
+````
+````
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-cri.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+````
+Execute the following commands to enable overlayFS & VxLan pod communication.
+````
+sudo modprobe overlay
+````
+````
+sudo modprobe br_netfilter
+````
+Set up required sysctl params, these persist across reboots.
+````
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-cri.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+````
+Reload the parameters.
+````
+sudo sysctl --system
+````
+Install Kubeadm & Kubelet & Kubectl
+
+Update your system packages:
+````
+sudo apt-get update
+````
+Install apt-transport-https curl
+````
+sudo apt-get install -y apt-transport-https curl
+````
+Add gpg keys
+````
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+````
+Add **"deb https://apt.kubernetes.io/ kubernetes-xenial main"** into **/etc/apt/sources.list.d/kubernetes.list**
+example:
+````
+sudo vim /etc/apt/sources.list.d/kubernetes.list
+add => deb https://apt.kubernetes.io/ kubernetes-xenial main
+````
+Install kubelet kubeadm kubectl
+````
+sudo apt-get update
+````
+````
+sudo apt-get install -y kubelet="1.28-1.00" kubeadm="1.28-1.00" kubectl="1.28-1.00"
+````
+````
+sudo apt-mark hold kubelet kubeadm kubectl
+````
+update apt
+````
+sudo apt-get update
+````
+install jq
+````
+sudo apt-get install -y jq
+````
+Add kubelet extra args
+````
+cat > /etc/default/kubelet << EOF
+KUBELET_EXTRA_ARGS=--node-ip={ip-local-machine}
+EOF
+````
+
+Config master node
+
+Pull kubeadm images
+````
+sudo kubeadm config images pull
+````
+Initialize kubeadm
+````
+sudo kubeadm init --apiserver-advertise-address={ip-master-node} --apiserver-cert-extra-sans={ip-master-node} --pod-network-cidr="192.168.0.0/16" --node-name {hostname} --ignore-preflight-errors Swap
+````
+Configuration kubeadm
+````
+mkdir -p "$HOME"/.kube
+````
+````
+sudo cp -i /etc/kubernetes/admin.conf "$HOME"/.kube/config
+````
+````
+sudo chown "$(id -u)":"$(id -g)" "$HOME"/.kube/config
+````
+Now, verify the kubeconfig by executing the following kubectl command to list all the pods in the kube-system namespace.
+````
+kubectl get po -n kube-system
+````
+create join-command from worker node to master node
+````
+kubeadm token create --print-join-command
+````
+Example: command run on worker node to join master node
+````
+sudo kubeadm join 192.168.119.129:6443 --token murj3y.yv2cqywq9j2grpuz --discovery-token-ca-cert-hash sha256:588824986bf5f1d8e7e255aa76a76b2e86a43d8c4d76f23bc9b03e31d81691cf
+````
+Verify node are join with master node
+````
+kubectl get nodes
 ````
